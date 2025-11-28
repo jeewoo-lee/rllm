@@ -145,3 +145,12 @@ class AgentTrainer:
                 workflow_args=self.workflow_args,
             )
         )
+    def _train_with_skyrl(self):
+        """
+        Train using the Skyrl backend.
+        For now, it supports workflow-based training.
+        """
+        if not ray.is_initialized():
+            ray.init(runtime_env=get_fireworks_ray_runtime_env(), num_cpus=self.config.ray_init.num_cpus)
+        
+        # TODO: import the task runner from rllm.trainer.skyrl.train_agent_ppo
