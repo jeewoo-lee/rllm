@@ -100,6 +100,10 @@ strands = [
     "strands-agents",
 ]
 
+skyrl = [
+    "skyrl-train>=0.2.0",
+]
+
 [tool.ruff]
 line-length = 5000 # TODO: Reduce this to a more reasonable value
 

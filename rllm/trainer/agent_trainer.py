@@ -49,8 +49,8 @@ class AgentTrainer:
             backend: Training backend to use ('verl' or 'fireworks'). Default is 'verl'
         """
         # Validate backend
-        if backend not in ["verl", "fireworks"]:
-            raise ValueError(f"backend must be either 'verl' or 'fireworks', got '{backend}'")
+        if backend not in ["verl", "fireworks", "skyrl"]:
+            raise ValueError(f"backend must be either 'verl' or 'fireworks or skyrl', got '{backend}'")
 
         self.backend = backend
 
@@ -94,6 +94,8 @@ class AgentTrainer:
             self._train_with_verl()
         elif self.backend == "fireworks":
             self._train_with_fireworks()
+        elif self.backend == "skyrl":
+            self._train_with_skyrl()
         else:
             raise ValueError(f"Unknown backend: {self.backend}")
 
@@ -154,3 +156,14 @@ class AgentTrainer:
             ray.init(runtime_env=get_fireworks_ray_runtime_env(), num_cpus=self.config.ray_init.num_cpus)
         
         # TODO: import the task runner from rllm.trainer.skyrl.train_agent_ppo
+        from rllm.trainer.skyrl.train_agent_ppo import TaskRunner
+
+        runner = TaskRunner.remote()
+
+        ray.get(
+            runner.run.remote(
+                config=self.config,
+                workflow_class=self.workflow_class,
+                workflow_args=self.workflow_args,
+            )
+        )
