@@ -10,24 +10,14 @@ import hydra
 import ray
 from omegaconf import OmegaConf, DictConfig
 
-from rllm.trainer.env_agent_mappings import WORKFLOW_CLASS_MAPPING
+from rllm.trainer.env_agent_mappings import AGENT_CLASS_MAPPING, ENV_CLASS_MAPPING, WORKFLOW_CLASS_MAPPING
 from rllm.engine.rollout.skyrl_engine import SkyRLEngine
-from rllm.trainer.skyrl.ray_runtime_env import get_ppo_ray_runtime_env
 
 # SkyRL imports
-import sys
-from pathlib import Path
-
-# Add skyrl-train to Python path
-skyrl_train_path = Path(__file__).parent.parent.parent.parent / "skyrl" / "skyrl-train"
-if skyrl_train_path.exists():
-    sys.path.insert(0, str(skyrl_train_path))
-
-from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir, validate_cfg
-from skyrl_train.utils import initialize_ray
-from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
+from skyrl_train.trainer.main_base import BasePPOExp
+from skyrl_train.utils import validate_cfg
+from skyrl_train.utils.utils import initialize_ray
 from skyrl_train.generators.base import GeneratorInterface
-from skyrl_train.entrypoints.main_base import create_ray_wrapped_inference_engines_from_config, create_remote_inference_engines_from_config
 
 
 @hydra.main(config_path="../config", config_name="agent_ppo_trainer", version_base=None)

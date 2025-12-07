@@ -16,6 +16,7 @@ class AgentTrainer:
     Supports two backends:
     - 'verl' (default): Standard training backend supporting both workflow and agent/env classes
     - 'fireworks': Pipeline-based training backend optimized for workflow-based training
+    - 'skyrl': Training bakend supporting workflow for now. 
     """
 
     def __init__(
@@ -29,7 +30,7 @@ class AgentTrainer:
         config: dict[str, Any] | list[str] | None = None,
         train_dataset: Dataset | None = None,
         val_dataset: Dataset | None = None,
-        backend: Literal["verl", "fireworks"] = "verl",
+        backend: Literal["verl", "fireworks", "skyrl"] = "verl",
     ):
         """
         Initialize the AgentTrainer.
