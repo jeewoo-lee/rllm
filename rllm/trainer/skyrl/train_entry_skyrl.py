@@ -14,6 +14,7 @@ from skyrl_train.generators.utils import get_rollout_metrics, get_response_ids_a
 import ray
 
 from rllm.engine.rollout.skyrl_engine import SkyRLEngine
+from rllm.engine.agent_workflow_engine import AgentWorkflowEngine
 from .agent_workflow_trainer_skyrl import AgentWorkflowPPOTrainer
 
 
@@ -22,8 +23,8 @@ class RLLMGenerator(GeneratorInterface):
 
     This generator:
     1. Receives GeneratorInput from SkyRL trainer
-    2. Runs rLLM workflows to generate trajectories
-    3. Converts results to GeneratorOutput for SkyRL training
+    2. Uses AgentWorkflowEngine to run rLLM workflows and generate trajectories
+    3. Returns GeneratorOutput for SkyRL training
     """
 
     def __init__(
@@ -54,9 +55,22 @@ class RLLMGenerator(GeneratorInterface):
             inference_engine_client=inference_engine_client,
             tokenizer=tokenizer,
         )
+        
+        # Create AgentWorkflowEngine that uses SkyRLEngine
+        n_parallel_tasks = config.generator.get("n_parallel_tasks", 128)
+        retry_limit = config.generator.get("retry_limit", 3)
+        
+        self.agent_workflow_engine = AgentWorkflowEngine(
+            workflow_cls=self.workflow_class,
+            workflow_args=self.workflow_args,
+            rollout_engine=self.rollout_engine,
+            config=self.config,
+            n_parallel_tasks=n_parallel_tasks,
+            retry_limit=retry_limit,
+        )
 
     async def generate(self, input_batch: GeneratorInput) -> GeneratorOutput:
-        """Generate trajectories using rLLM workflows.
+        """Generate trajectories using rLLM workflows via AgentWorkflowEngine.
 
         Args:
             input_batch: SkyRL's GeneratorInput with prompts and environment info
@@ -64,133 +78,11 @@ class RLLMGenerator(GeneratorInterface):
         Returns:
             GeneratorOutput: Tensor data ready for SkyRL training
         """
-        # Extract prompts and environment info
-        prompts = input_batch["prompts"]
-        env_extras = input_batch.get("env_extras", [{}] * len(prompts))
-
-        # Run all workflows in parallel to get episodes
-        tasks = []
-        for prompt, env_extra in zip(prompts, env_extras):
-            tasks.append(self._run_workflow(prompt, env_extra))
-
-        episodes = await asyncio.gather(*tasks)
-
-        # Transform episodes to GeneratorOutput
-        return self._transform_episodes_to_generator_output(episodes)
-
-    async def _run_workflow(self, prompt, env_extra):
-        """Run a single rLLM workflow and return Episode.
-
-        Args:
-            prompt: ConversationType (list of messages)
-            env_extra: Environment configuration/task data
-
-        Returns:
-            Episode: Result from workflow execution
-        """
-        # Extract task from env_extra
-        task = env_extra.get("task", {"prompt": prompt})
-
-        # Create workflow instance
-        executor = ThreadPoolExecutor(max_workers=1)
-        workflow = self.workflow_class(
-            rollout_engine=self.rollout_engine,
-            executor=executor,
-            **self.workflow_args
-        )
-
-        # Run workflow to get episode
-        episode = await workflow.run(task=task, uid=f"workflow_{id(prompt)}")
-
-        return episode
-
-    def _transform_episodes_to_generator_output(self, episodes) -> GeneratorOutput:
-        """Transform Episodes to GeneratorOutput.
-
-        This method is episode-facing: it processes all trajectories from all episodes.
-
-        Args:
-            episodes: List of Episode objects from workflow execution
-
-        Returns:
-            GeneratorOutput: Formatted data for SkyRL training
-        """
-        prompt_token_ids = []
-        response_ids = []
-        rewards = []
-        loss_masks = []
-        stop_reasons = []
-        rollout_logprobs = []
-
-        # Episode-facing loop
-        for episode in episodes:
-            if not episode.trajectories or len(episode.trajectories) == 0:
-                continue
-
-            # Process ALL trajectories in the episode
-            for trajectory in episode.trajectories:
-                if len(trajectory.steps) == 0:
-                    continue
-
-                # Build chat history from all steps
-                chat_history = []
-                for step in trajectory.steps:
-                    if step.chat_completions:
-                        chat_history.extend(step.chat_completions)
-
-                if len(chat_history) == 0:
-                    continue
-
-                # Extract prompt (first user message)
-                assert chat_history[0]["role"] == "user", "First message should be user"
-                prompt_messages = [chat_history[0]]
-                prompt_ids = self.tokenizer.apply_chat_template(
-                    prompt_messages,
-                    add_generation_prompt=False,
-                    tokenize=True,
-                )
-
-                # Process response messages
-                response_messages = chat_history[1:]
-                assistant_logprobs = None  # TODO: Extract if available from ModelOutput
-                resp_ids, loss_mask, resp_logprobs = get_response_ids_and_loss_mask_from_messages(
-                    response_messages, self.tokenizer, assistant_logprobs
-                )
-
-                # Determine stop reason
-                stop_reason = "complete"
-                if len(resp_ids) > self.max_response_length:
-                    stop_reason = "length"
-
-                # Truncate to maximum allowed length
-                resp_ids = resp_ids[:self.max_response_length]
-                loss_mask = loss_mask[:self.max_response_length]
-                resp_logprobs = resp_logprobs[:self.max_response_length] if resp_logprobs else None
-
-                # Append to batch
-                prompt_token_ids.append(prompt_ids)
-                response_ids.append(resp_ids)
-                rewards.append(trajectory.reward)
-                loss_masks.append(loss_mask)
-                stop_reasons.append(stop_reason)
-                rollout_logprobs.append(resp_logprobs)
-
-        # Compute rollout metrics
-        rollout_metrics = get_rollout_metrics(response_ids, rewards)
-
-        # Return GeneratorOutput
-        return GeneratorOutput(
-            prompt_token_ids=prompt_token_ids,
-            response_ids=response_ids,
-            rewards=rewards,
-            loss_masks=loss_masks,
-            stop_reasons=stop_reasons,
-            rollout_metrics=rollout_metrics,
-            rollout_logprobs=rollout_logprobs,
-        )
+        # Use AgentWorkflowEngine to execute tasks and transform results
+        return await self.agent_workflow_engine.execute_tasks_skyrl(input_batch)
 
 
-class SkyRLAgentPPOExp(BasePPOExp):
+class RLLMPPOExp(BasePPOExp):
     def get_generator(self, cfg, tokenizer, llm_endpoint_client):
         # Get workflow class and args from config
         workflow_class = cfg.generator.get("workflow_class", None)
@@ -245,7 +137,7 @@ class SkyRLAgentPPOExp(BasePPOExp):
 @ray.remote(num_cpus=1)
 def skyrl_entrypoint(cfg: DictConfig):
     # make sure that the training loop is not run on the head node.
-    exp = SkyRLAgentPPOExp(cfg)
+    exp = RLLMPPOExp(cfg)
     exp.run()
 
 
