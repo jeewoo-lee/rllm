@@ -157,10 +157,11 @@ class AgentTrainer:
             ray.init(runtime_env=get_fireworks_ray_runtime_env(), num_cpus=self.config.ray_init.num_cpus)
         
         # TODO: import the task runner from rllm.trainer.skyrl.train_agent_ppo
-        from rllm.trainer.skyrl.train_agent_ppo import TaskRunner
+        from rllm.trainer.skyrl.train_entry_skyrl import RLLMPPOExp
 
-        runner = TaskRunner.remote()
+        runner = RLLMPPOExp.remote()
 
+        # TODO: correct ray set up.
         ray.get(
             runner.run.remote(
                 config=self.config,
