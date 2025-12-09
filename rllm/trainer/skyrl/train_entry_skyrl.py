@@ -8,8 +8,9 @@ from concurrent.futures import ThreadPoolExecutor
 from omegaconf import DictConfig
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.entrypoints.main_base import BasePPOExp, config_dir, validate_cfg
+from skyrl_train.entrypoints.main_base import BasePPOExp, validate_cfg
 from skyrl_train.utils import initialize_ray
+from pathlib import Path
 from skyrl_train.generators.utils import get_rollout_metrics, get_response_ids_and_loss_mask_from_messages
 import ray
 
@@ -141,7 +142,10 @@ def skyrl_entrypoint(cfg: DictConfig):
     exp.run()
 
 
-@hydra.main(config_path=config_dir, config_name="ppo_base_config", version_base=None)
+# Use rLLM's config directory for rLLM-specific configs
+rllm_config_dir = str(Path(__file__).parent.parent / "config")
+
+@hydra.main(config_path=rllm_config_dir, config_name="rllm_skyrl_ppo_config", version_base=None)
 def main(cfg: DictConfig) -> None:
     # validate the arguments
     validate_cfg(cfg)

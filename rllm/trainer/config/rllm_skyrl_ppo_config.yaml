@@ -1,0 +1,49 @@
+# rLLM SkyRL PPO Training Configuration
+# This config extends SkyRL's ppo_base_config and adds rLLM-specific defaults
+#
+# Usage:
+#   python -m rllm.trainer.skyrl.train_entry_skyrl \
+#     rllm.workflow.workflow_class="rllm.examples.solver_judge.solver_judge_flow.SolverJudgeWorkflow" \
+#     rllm.workflow.workflow_args.reward_function=null
+
+hydra:
+  searchpath:
+    - pkg://skyrl_train.config # Include SkyRL's config directory
+
+defaults:
+  - ppo_base_config # Import SkyRL's base config
+  - _self_
+
+# rLLM-specific configuration
+rllm:
+  workflow:
+    # Workflow class and arguments are typically provided via command line or in workflow_args
+    # Example: rllm.workflow.workflow_class="rllm.examples.solver_judge.solver_judge_flow.SolverJudgeWorkflow"
+    workflow_class: null # Must be specified
+    workflow_args: {}
+    n_parallel_tasks: 128
+    retry_limit: 3
+  stepwise_advantage:
+    enable: False
+    mode: broadcast # [broadcast, per_step]
+    normalize_by_steps: False
+  compact_filtering:
+    enable: False
+    mask_max_prompt_length_exceeded: True
+    mask_max_response_length_exceeded: True
+    mask_max_turns_exceeded: True
+    mask_timeout: True
+    mask_error: True
+    mask_unknown: False
+    mask_env_done: False
+
+# Generator configuration (SkyRL-specific)
+generator:
+  # These can be overridden via command line
+  n_parallel_tasks: ${rllm.workflow.n_parallel_tasks}
+  retry_limit: ${rllm.workflow.retry_limit}
+  workflow_class: ${rllm.workflow.workflow_class}
+  workflow_args: ${rllm.workflow.workflow_args}
+  sampling_params:
+    max_tokens: 4096
+    max_generate_length: 4096

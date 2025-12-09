@@ -514,6 +514,15 @@ class AgentWorkflowEngine:
         
         tokenizer = self.rollout_engine.tokenizer
         
+        # Check if stepwise advantage is enabled
+        stepwise_enabled = False
+        if hasattr(self, 'config') and self.config is not None:
+            try:
+                stepwise_enabled = self.config.rllm.stepwise_advantage.enable
+            except (AttributeError, KeyError):
+                # rllm.stepwise_advantage not in config, default to False
+                stepwise_enabled = False
+        
         # Episode-facing loop
         for episode in episodes:
             if episode is None:
@@ -527,51 +536,103 @@ class AgentWorkflowEngine:
                 if len(trajectory.steps) == 0:
                     continue
 
-                # Build chat history from all steps
-                chat_history = []
-                for step in trajectory.steps:
-                    if step.chat_completions:
-                        chat_history.extend(step.chat_completions)
+                if not stepwise_enabled:
+                    # Trajectory-level mode: use cumulative chat history and trajectory reward
+                    # Build chat history from all steps
+                    chat_history = []
+                    for step in trajectory.steps:
+                        if step.chat_completions:
+                            chat_history.extend(step.chat_completions)
 
-                if len(chat_history) == 0:
-                    continue
+                    if len(chat_history) == 0:
+                        continue
 
-                # Extract prompt (first user message)
-                if chat_history[0]["role"] != "user":
-                    logger.warning(f"First message is not user, skipping trajectory")
-                    continue
-                    
-                prompt_messages = [chat_history[0]]
-                prompt_ids = tokenizer.apply_chat_template(
-                    prompt_messages,
-                    add_generation_prompt=False,
-                    tokenize=True,
-                )
+                    # Extract prompt (first user message)
+                    if chat_history[0]["role"] != "user":
+                        logger.warning(f"First message is not user, skipping trajectory")
+                        continue
+                        
+                    prompt_messages = [chat_history[0]]
+                    prompt_ids = tokenizer.apply_chat_template(
+                        prompt_messages,
+                        add_generation_prompt=False,
+                        tokenize=True,
+                    )
 
-                # Process response messages
-                response_messages = chat_history[1:]
-                assistant_logprobs = None  # TODO: Extract if available from ModelOutput
-                resp_ids, loss_mask, resp_logprobs = get_response_ids_and_loss_mask_from_messages(
-                    response_messages, tokenizer, assistant_logprobs
-                )
+                    # Process response messages
+                    response_messages = chat_history[1:]
+                    assistant_logprobs = None  # TODO: Extract if available from ModelOutput
+                    resp_ids, loss_mask, resp_logprobs = get_response_ids_and_loss_mask_from_messages(
+                        response_messages, tokenizer, assistant_logprobs
+                    )
 
-                # Determine stop reason
-                stop_reason = "complete"
-                if len(resp_ids) > max_response_length:
-                    stop_reason = "length"
+                    # Determine stop reason
+                    stop_reason = "complete"
+                    if len(resp_ids) > max_response_length:
+                        stop_reason = "length"
 
-                # Truncate to maximum allowed length
-                resp_ids = resp_ids[:max_response_length]
-                loss_mask = loss_mask[:max_response_length]
-                resp_logprobs = resp_logprobs[:max_response_length] if resp_logprobs else None
+                    # Truncate to maximum allowed length
+                    resp_ids = resp_ids[:max_response_length]
+                    loss_mask = loss_mask[:max_response_length]
+                    resp_logprobs = resp_logprobs[:max_response_length] if resp_logprobs else None
 
-                # Append to batch
-                prompt_token_ids.append(prompt_ids)
-                response_ids.append(resp_ids)
-                rewards.append(trajectory.reward)
-                loss_masks.append(loss_mask)
-                stop_reasons.append(stop_reason)
-                rollout_logprobs.append(resp_logprobs)
+                    # Append to batch - use trajectory-level reward
+                    prompt_token_ids.append(prompt_ids)
+                    response_ids.append(resp_ids)
+                    rewards.append(trajectory.reward)  # Trajectory-level reward
+                    loss_masks.append(loss_mask)
+                    stop_reasons.append(stop_reason)
+                    rollout_logprobs.append(resp_logprobs)
+
+                else:
+                    # Stepwise mode: process each step separately with step-level rewards
+                    # Similar to Verl: each step's chat_completions contains full conversation up to that step
+                    for step_idx, step in enumerate(trajectory.steps):
+                        # Use step.chat_completions directly (contains full conversation up to this step)
+                        if not step.chat_completions:
+                            continue
+
+                        chat_history = step.chat_completions
+
+                        if len(chat_history) == 0:
+                            continue
+
+                        # Extract prompt (first user message)
+                        if chat_history[0]["role"] != "user":
+                            logger.warning(f"First message is not user, skipping step {step_idx}")
+                            continue
+                            
+                        prompt_messages = [chat_history[0]]
+                        prompt_ids = tokenizer.apply_chat_template(
+                            prompt_messages,
+                            add_generation_prompt=False,
+                            tokenize=True,
+                        )
+
+                        # Process response messages (from this step onwards)
+                        response_messages = chat_history[1:]
+                        assistant_logprobs = None  # TODO: Extract if available from ModelOutput
+                        resp_ids, loss_mask, resp_logprobs = get_response_ids_and_loss_mask_from_messages(
+                            response_messages, tokenizer, assistant_logprobs
+                        )
+
+                        # Determine stop reason
+                        stop_reason = "complete"
+                        if len(resp_ids) > max_response_length:
+                            stop_reason = "length"
+
+                        # Truncate to maximum allowed length
+                        resp_ids = resp_ids[:max_response_length]
+                        loss_mask = loss_mask[:max_response_length]
+                        resp_logprobs = resp_logprobs[:max_response_length] if resp_logprobs else None
+
+                        # Append to batch - use step-level reward
+                        prompt_token_ids.append(prompt_ids)
+                        response_ids.append(resp_ids)
+                        rewards.append(step.reward)  # Step-level reward
+                        loss_masks.append(loss_mask)
+                        stop_reasons.append(stop_reason)
+                        rollout_logprobs.append(resp_logprobs)
 
         # Compute rollout metrics
         rollout_metrics = get_rollout_metrics(response_ids, rewards) if response_ids else None
