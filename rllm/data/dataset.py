@@ -1,7 +1,7 @@
 import json
 import logging
 import os
-from typing import Any
+from typing import Any, Callable
 
 import pandas as pd
 import polars as pl
@@ -85,6 +85,117 @@ class Dataset(torch.utils.data.Dataset):
 
         verl_path = data_path.replace(".parquet", "_verl.parquet")
         return verl_path if os.path.exists(verl_path) else None
+
+    def to_skyrl_format(
+        self,
+        conversion_fn: Callable[[dict[str, Any]], dict[str, Any]] | None = None,
+        data_source: str | None = None,
+        env_class: str | None = None,
+        reward_method: str = "rule",
+    ) -> list[dict[str, Any]]:
+        """Convert dataset to SkyRL format.
+
+        SkyRL expects each entry to have:
+        - data_source: str
+        - prompt: list[dict] with role/content (OpenAI chat format)
+        - env_class: str
+        - reward_spec: dict with method and ground_truth
+        - extra_info: dict (optional)
+
+        Args:
+            conversion_fn: Optional custom function to convert each entry.
+                         If None, uses a default conversion that expects entries with
+                         'prompt' or 'question' field and 'answer' or 'solution' field.
+                         Function signature: (entry: dict) -> dict
+            data_source: Optional data source identifier. If None, uses self.name or "unknown"
+            env_class: Optional environment class. If None, must be provided in conversion_fn or entries
+            reward_method: Reward method ("rule" or "reward_model"). Defaults to "rule"
+
+        Returns:
+            List of dictionaries in SkyRL format
+        """
+        if conversion_fn is None:
+            # Default conversion function
+            def default_conversion(entry: dict[str, Any]) -> dict[str, Any]:
+                # Extract prompt - try different common field names
+                prompt = entry.get("prompt")
+                if prompt is None:
+                    # If prompt is a string, convert to chat format
+                    question = entry.get("question") or entry.get("input") or ""
+                    prompt = [{"role": "user", "content": question}]
+                elif isinstance(prompt, str):
+                    prompt = [{"role": "user", "content": prompt}]
+                elif not isinstance(prompt, list):
+                    prompt = [{"role": "user", "content": str(prompt)}]
+
+                # Extract ground truth
+                ground_truth = (
+                    entry.get("answer")
+                    or entry.get("solution")
+                    or entry.get("ground_truth")
+                    or entry.get("output")
+                    or None
+                )
+
+                # Extract env_class
+                entry_env_class = entry.get("env_class") or env_class
+
+                # Build SkyRL format entry
+                skyrl_entry = {
+                    "data_source": data_source or self.name or "unknown",
+                    "prompt": prompt,
+                    "reward_spec": {
+                        "method": reward_method,
+                        "ground_truth": ground_truth,
+                    },
+                }
+
+                if entry_env_class:
+                    skyrl_entry["env_class"] = entry_env_class
+
+                # Add all other fields as extra_info
+                extra_info = {
+                    k: v
+                    for k, v in entry.items()
+                    if k not in ["prompt", "question", "input", "answer", "solution", "ground_truth", "output", "env_class"]
+                }
+                if extra_info:
+                    skyrl_entry["extra_info"] = extra_info
+
+                return skyrl_entry
+
+            conversion_fn = default_conversion
+
+        # Convert all entries
+        skyrl_data = [conversion_fn(entry.copy()) for entry in self.data]
+        return skyrl_data
+
+    def get_skyrl_data_path(self, force_recreate: bool = False, **conversion_kwargs) -> str | None:
+        """Get or create the SkyRL-formatted dataset file path.
+
+        Args:
+            force_recreate: If True, recreate the file even if it exists
+            **conversion_kwargs: Arguments to pass to to_skyrl_format()
+
+        Returns:
+            Optional[str]: The absolute path of the SkyRL-formatted dataset file
+        """
+        data_path = self.get_data_path()
+        if data_path is None:
+            return None
+
+        skyrl_path = data_path.replace(".parquet", "_skyrl.parquet")
+        skyrl_path = skyrl_path.replace(".json", "_skyrl.parquet")
+        skyrl_path = skyrl_path.replace(".jsonl", "_skyrl.parquet")
+
+        # Create SkyRL format file if it doesn't exist or force_recreate is True
+        if force_recreate or not os.path.exists(skyrl_path):
+            skyrl_data = self.to_skyrl_format(**conversion_kwargs)
+            df = pd.DataFrame(skyrl_data)
+            df.to_parquet(skyrl_path, index=False)
+            logger.info(f"Created SkyRL-formatted dataset at {skyrl_path}")
+
+        return skyrl_path if os.path.exists(skyrl_path) else None
 
     @classmethod
     def load_data(cls, path: str) -> "Dataset":

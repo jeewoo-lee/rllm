@@ -82,10 +82,26 @@ class AgentTrainer:
 
         self.config = config
 
+        # Set dataset paths based on backend
         if train_dataset is not None and self.config is not None and hasattr(self.config, "data"):
-            self.config.data.train_files = train_dataset.get_verl_data_path()
+            if self.backend == "skyrl":
+                # SkyRL expects train_data/val_data as lists
+                skyrl_path = train_dataset.get_skyrl_data_path()
+                if skyrl_path:
+                    self.config.data.train_data = [skyrl_path]
+            else:
+                # VERL/Fireworks use train_files/val_files
+                self.config.data.train_files = train_dataset.get_verl_data_path()
+        
         if val_dataset is not None and self.config is not None and hasattr(self.config, "data"):
-            self.config.data.val_files = val_dataset.get_verl_data_path()
+            if self.backend == "skyrl":
+                # SkyRL expects train_data/val_data as lists
+                skyrl_path = val_dataset.get_skyrl_data_path()
+                if skyrl_path:
+                    self.config.data.val_data = [skyrl_path]
+            else:
+                # VERL/Fireworks use train_files/val_files
+                self.config.data.val_files = val_dataset.get_verl_data_path()
 
     def train(self):
         """
