@@ -2,3 +2,6 @@
 	path = verl
 	url = https://github.com/volcengine/verl.git
 	branch = main
+[submodule "skyrl"]
+	path = skyrl
+	url = https://github.com/berkeley-sky-lab/skyrl.git

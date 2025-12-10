@@ -236,3 +236,231 @@ class AgentWorkflowEngine:
         if hasattr(self, "executor") and self.executor is not None:
             self.executor.shutdown(wait=True)
             self.executor = None
+            
+    async def execute_tasks_skyrl(self, generator_input, **kwargs):
+        """Execute tasks from a SkyRL GeneratorInput and return GeneratorOutput.
+
+        Args:
+            generator_input: SkyRL GeneratorInput with prompts, env_classes, env_extras, etc.
+            **kwargs: Additional arguments passed to execute_tasks.
+
+        Returns:
+            GeneratorOutput: Transformed results compatible with SkyRL training.
+        """
+        # Wake up the rollout engine if it's a SkyRLEngine
+        if hasattr(self.rollout_engine, 'wake_up'):
+            await self.rollout_engine.wake_up()
+        
+        try:
+            # Extract tasks from generator_input
+            prompts = generator_input["prompts"]
+            env_extras = generator_input.get("env_extras", [{}] * len(prompts))
+            env_classes = generator_input.get("env_classes", [None] * len(prompts))
+            trajectory_ids = generator_input.get("trajectory_ids", None)
+            
+            # Convert prompts and env_extras to task dictionaries
+            tasks = []
+            task_ids = []
+            for i, (prompt, env_extra, env_class) in enumerate(zip(prompts, env_extras, env_classes)):
+                # Create task dict from prompt and env_extra
+                task = env_extra.copy() if env_extra else {}
+                if "task" not in task:
+                    task["task"] = {"prompt": prompt}
+                if "prompt" not in task:
+                    task["prompt"] = prompt
+                tasks.append(task)
+                
+                # Use trajectory_id if available, otherwise generate one
+                if trajectory_ids and i < len(trajectory_ids):
+                    traj_id = trajectory_ids[i]
+                    if hasattr(traj_id, 'instance_id'):
+                        task_id = traj_id.instance_id
+                    else:
+                        task_id = str(traj_id)
+                else:
+                    task_id = str(uuid.uuid4())
+                task_ids.append(task_id)
+            
+            # Set validation mode if needed
+            batch_metadata = generator_input.get("batch_metadata")
+            if batch_metadata and hasattr(batch_metadata, 'training_phase'):
+                if batch_metadata.training_phase == "eval":
+                    self.current_mode = "val"
+                    if hasattr(self.rollout_engine, 'validate'):
+                        self.rollout_engine.validate = True
+                else:
+                    self.current_mode = "train"
+            
+            # Execute tasks
+            results = await self.execute_tasks(tasks, task_ids, **kwargs)  # list of Episodes
+            
+            # Reset validation mode
+            if hasattr(self.rollout_engine, 'validate'):
+                self.rollout_engine.validate = False
+            self.current_mode = "train"
+            
+            return self.transform_results_for_skyrl(results, generator_input)
+        finally:
+            # Sleep the rollout engine if it's a SkyRLEngine
+            if hasattr(self.rollout_engine, 'sleep'):
+                await self.rollout_engine.sleep()
+
+    def transform_results_for_skyrl(self, episodes: list[Episode], generator_input):
+        """Transform episode results into SkyRL-compatible GeneratorOutput format.
+
+        Args:
+            episodes: List of completed episodes from workflow execution.
+            generator_input: Original GeneratorInput for reference.
+
+        Returns:
+            GeneratorOutput: Formatted data ready for SkyRL training pipeline.
+        """
+        from skyrl_train.generators.base import GeneratorOutput
+        from skyrl_train.generators.utils import get_response_ids_and_loss_mask_from_messages, get_rollout_metrics
+        
+        prompt_token_ids = []
+        response_ids = []
+        rewards = []
+        loss_masks = []
+        stop_reasons = []
+        rollout_logprobs = []
+        
+        max_response_length = generator_input.get("sampling_params", {}).get("max_tokens", 4096)
+        if hasattr(self, 'config') and self.config is not None:
+            max_response_length = getattr(self.config.generator.sampling_params, 'max_generate_length', max_response_length)
+        
+        tokenizer = self.rollout_engine.tokenizer
+        
+        # Check if stepwise advantage is enabled
+        stepwise_enabled = False
+        if hasattr(self, 'config') and self.config is not None:
+            try:
+                stepwise_enabled = self.config.rllm.stepwise_advantage.enable
+            except (AttributeError, KeyError):
+                # rllm.stepwise_advantage not in config, default to False
+                stepwise_enabled = False
+        
+        # Episode-facing loop
+        for episode in episodes:
+            if episode is None:
+                continue
+                
+            if not episode.trajectories or len(episode.trajectories) == 0:
+                continue
+
+            # Process ALL trajectories in the episode
+            for trajectory in episode.trajectories:
+                if len(trajectory.steps) == 0:
+                    continue
+
+                if not stepwise_enabled:
+                    # Trajectory-level mode: use cumulative chat history and trajectory reward
+                    # Build chat history from all steps
+                    chat_history = []
+                    for step in trajectory.steps:
+                        if step.chat_completions:
+                            chat_history.extend(step.chat_completions)
+
+                    if len(chat_history) == 0:
+                        continue
+
+                    # Extract prompt (first user message)
+                    if chat_history[0]["role"] != "user":
+                        logger.warning(f"First message is not user, skipping trajectory")
+                        continue
+                        
+                    prompt_messages = [chat_history[0]]
+                    prompt_ids = tokenizer.apply_chat_template(
+                        prompt_messages,
+                        add_generation_prompt=False,
+                        tokenize=True,
+                    )
+
+                    # Process response messages
+                    response_messages = chat_history[1:]
+                    assistant_logprobs = None  # TODO: Extract if available from ModelOutput
+                    resp_ids, loss_mask, resp_logprobs = get_response_ids_and_loss_mask_from_messages(
+                        response_messages, tokenizer, assistant_logprobs
+                    )
+
+                    # Determine stop reason
+                    stop_reason = "complete"
+                    if len(resp_ids) > max_response_length:
+                        stop_reason = "length"
+
+                    # Truncate to maximum allowed length
+                    resp_ids = resp_ids[:max_response_length]
+                    loss_mask = loss_mask[:max_response_length]
+                    resp_logprobs = resp_logprobs[:max_response_length] if resp_logprobs else None
+
+                    # Append to batch - use trajectory-level reward
+                    prompt_token_ids.append(prompt_ids)
+                    response_ids.append(resp_ids)
+                    rewards.append(trajectory.reward)  # Trajectory-level reward
+                    loss_masks.append(loss_mask)
+                    stop_reasons.append(stop_reason)
+                    rollout_logprobs.append(resp_logprobs)
+
+                else:
+                    # Stepwise mode: process each step separately with step-level rewards
+                    # Similar to Verl: each step's chat_completions contains full conversation up to that step
+                    for step_idx, step in enumerate(trajectory.steps):
+                        # Use step.chat_completions directly (contains full conversation up to this step)
+                        if not step.chat_completions:
+                            continue
+
+                        chat_history = step.chat_completions
+
+                        if len(chat_history) == 0:
+                            continue
+
+                        # Extract prompt (first user message)
+                        if chat_history[0]["role"] != "user":
+                            logger.warning(f"First message is not user, skipping step {step_idx}")
+                            continue
+                            
+                        prompt_messages = [chat_history[0]]
+                        prompt_ids = tokenizer.apply_chat_template(
+                            prompt_messages,
+                            add_generation_prompt=False,
+                            tokenize=True,
+                        )
+
+                        # Process response messages (from this step onwards)
+                        response_messages = chat_history[1:]
+                        assistant_logprobs = None  # TODO: Extract if available from ModelOutput
+                        resp_ids, loss_mask, resp_logprobs = get_response_ids_and_loss_mask_from_messages(
+                            response_messages, tokenizer, assistant_logprobs
+                        )
+
+                        # Determine stop reason
+                        stop_reason = "complete"
+                        if len(resp_ids) > max_response_length:
+                            stop_reason = "length"
+
+                        # Truncate to maximum allowed length
+                        resp_ids = resp_ids[:max_response_length]
+                        loss_mask = loss_mask[:max_response_length]
+                        resp_logprobs = resp_logprobs[:max_response_length] if resp_logprobs else None
+
+                        # Append to batch - use step-level reward
+                        prompt_token_ids.append(prompt_ids)
+                        response_ids.append(resp_ids)
+                        rewards.append(step.reward)  # Step-level reward
+                        loss_masks.append(loss_mask)
+                        stop_reasons.append(stop_reason)
+                        rollout_logprobs.append(resp_logprobs)
+
+        # Compute rollout metrics
+        rollout_metrics = get_rollout_metrics(response_ids, rewards) if response_ids else None
+
+        # Return GeneratorOutput
+        return GeneratorOutput(
+            prompt_token_ids=prompt_token_ids,
+            response_ids=response_ids,
+            rewards=rewards,
+            loss_masks=loss_masks,
+            stop_reasons=stop_reasons,
+            rollout_metrics=rollout_metrics,
+            rollout_logprobs=rollout_logprobs,
+        )
