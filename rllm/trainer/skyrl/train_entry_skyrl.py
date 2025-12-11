@@ -88,36 +88,25 @@ class RLLMPPOExp(BasePPOExp):
         
         Args:
             cfg: Training configuration
-            workflow_class: Optional workflow class (can be passed directly or from config)
-            workflow_args: Optional workflow arguments (can include functions).
-                          These will be merged with workflow_args from config.
+            workflow_class: Workflow class (required, must be passed as parameter)
+            workflow_args: Optional workflow arguments (can include functions)
         """
         super().__init__(cfg)
         self.workflow_class = workflow_class
         self.workflow_args = workflow_args or {}
     
     def get_generator(self, cfg, tokenizer, llm_endpoint_client):
-        # Get workflow class from parameter or config (parameter takes precedence)
+        # workflow_class must be provided as parameter (no config fallback)
+        if self.workflow_class is None:
+            raise ValueError("workflow_class must be provided as parameter to RLLMPPOExp")
+        
         workflow_class = self.workflow_class
-        if workflow_class is None:
-            # Fallback to config if not provided as parameter
-            workflow_class_str = cfg.generator.get("workflow_class", None)
-            if workflow_class_str is None:
-                raise ValueError("workflow_class must be specified either as parameter or in cfg.generator")
-            # Deserialize from string if needed
-            from importlib import import_module
-            module_path, class_name = workflow_class_str.rsplit(".", 1)
-            module = import_module(module_path)
-            workflow_class = getattr(module, class_name)
         
-        # Get workflow_args from config
-        config_workflow_args = cfg.generator.get("workflow_args", {})
-        
-        # Merge workflow_args from parameter with config (similar to verl's pattern)
+        # Merge workflow_args from parameter with config (matching verl's pattern)
         # Start with parameter, then merge config values into it (parameter takes precedence)
         workflow_args = self.workflow_args or {}
-        if config_workflow_args is not None:
-            for key, value in config_workflow_args.items():
+        if cfg.generator.get("workflow_args") is not None:
+            for key, value in cfg.generator.get("workflow_args").items():
                 if value is not None:
                     if key in workflow_args and isinstance(workflow_args[key], dict) and isinstance(value, dict):
                         workflow_args[key].update(value)
@@ -169,10 +158,8 @@ def skyrl_entrypoint(cfg: DictConfig, workflow_class: type | None = None, workfl
     
     Args:
         cfg: Training configuration
-        workflow_class: Optional workflow class (can be passed directly or from config).
-                       If not provided, will be read from cfg.generator.workflow_class.
-        workflow_args: Optional workflow arguments (can include functions).
-                      These will be merged with workflow_args from config.
+        workflow_class: Workflow class (required, must be passed as parameter)
+        workflow_args: Optional workflow arguments (can include functions)
     """
     from rllm.trainer.skyrl.ray_runtime_env import validate_cfg
     
@@ -189,19 +176,12 @@ def run_skyrl(cfg: DictConfig, workflow_class: type | None = None, workflow_args
     
     Args:
         cfg: Training configuration
-        workflow_class: Optional workflow class (can be passed directly or from config)
+        workflow_class: Workflow class (required, must be passed as parameter)
         workflow_args: Optional workflow arguments (can include functions)
     """
     import ray
     
-    from rllm.trainer.skyrl.ray_runtime_env import prepare_config, initialize_ray
-    
-    # Prepare config (serialize workflow_class as fallback)
-    prepare_config(
-        cfg=cfg,
-        workflow_class=workflow_class,
-        workflow_args=workflow_args,
-    )
+    from rllm.trainer.skyrl.ray_runtime_env import initialize_ray
     
     # Initialize Ray (matching verl's pattern - inline initialization)
     initialize_ray(cfg)

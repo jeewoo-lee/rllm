@@ -17,41 +17,6 @@ if _skyrl_train_path.exists():
     sys.path.insert(0, str(_skyrl_train_path))
 
 
-def prepare_config(
-    cfg: "DictConfig",
-    workflow_class: type | None = None,
-    workflow_args: dict | None = None,
-) -> None:
-    """
-    Prepare SkyRL config by optionally serializing workflow_class.
-    
-    This function:
-    - Optionally converts workflow_class to a string path in config (as fallback)
-    
-    Note: workflow_class and workflow_args are passed directly to skyrl_entrypoint()
-    as parameters (Ray can serialize them with cloudpickle). The config serialization
-    is only a fallback for cases where workflow_class is not provided as a parameter.
-    
-    Args:
-        cfg: Training configuration to modify in-place
-        workflow_class: Optional workflow class to serialize into config (as fallback)
-        workflow_args: Workflow arguments (unused here, kept for API consistency)
-    """
-    # Optionally set workflow class in config as fallback
-    # Convert to string path because:
-    # 1. Config needs to be serializable for Ray remote calls
-    # 2. Class objects can't be serialized in DictConfig
-    # 3. RLLMPPOExp.get_generator() will deserialize it if not provided as parameter
-    if workflow_class is not None:
-        workflow_class_str = f"{workflow_class.__module__}.{workflow_class.__name__}"
-        cfg.generator.workflow_class = workflow_class_str
-    
-    # Note: workflow_args are NOT put into config here because:
-    # 1. Functions can't be serialized in DictConfig
-    # 2. workflow_args are passed directly to skyrl_entrypoint() as a parameter
-    # 3. They will be merged with config values in RLLMPPOExp.get_generator()
-
-
 def validate_cfg(cfg: "DictConfig") -> None:
     """
     Validate SkyRL training configuration.
