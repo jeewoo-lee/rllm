@@ -186,39 +186,21 @@ class AgentTrainer:
         Train using the Skyrl backend.
         For now, it supports workflow-based training.
         """
+        import ray
+
         from rllm.trainer.skyrl.train_entry_skyrl import skyrl_entrypoint
-        from skyrl_train.utils import initialize_ray
-        from skyrl_train.entrypoints.main_base import validate_cfg
+        from rllm.trainer.skyrl.ray_runtime_env import prep_ray_env
         
-        # Set workflow class in config if provided (workflow_args passed directly, not via config)
-        if self.workflow_class is not None:
-            # Convert workflow class to string path
-            workflow_class_str = f"{self.workflow_class.__module__}.{self.workflow_class.__name__}"
-            self.config.generator.workflow_class = workflow_class_str
-        
-        # Merge workflow_args from config if present (for serializable values)
-        # Functions and other non-serializable values are passed directly to the remote function
-        if self.workflow_args is not None:
-            # Update config with serializable values only (for reference)
-            config_workflow_args = self.config.generator.get("workflow_args", {})
-            if isinstance(config_workflow_args, dict) and isinstance(self.workflow_args, dict):
-                # Merge, but don't overwrite with functions
-                for k, v in self.workflow_args.items():
-                    if not (callable(v) and not isinstance(v, type)):
-                        config_workflow_args[k] = v
-                self.config.generator.workflow_args = config_workflow_args
-        
-        # Validate config (SkyRL expects this)
-        validate_cfg(self.config)
-        
-        # Initialize Ray using SkyRL's utility (it handles GPU detection)
-        # If Ray is already initialized, shut it down first so SkyRL can initialize it properly
-        if ray.is_initialized():
-            ray.shutdown()
-        
-        initialize_ray(self.config)
+        # Prepare Ray environment: serialize config, validate, and initialize Ray
+        prep_ray_env(
+            cfg=self.config,
+            workflow_class=self.workflow_class,
+            workflow_args=self.workflow_args,
+        )
         
         # Call SkyRL entrypoint as a Ray remote task
-        # Pass workflow_args directly (Ray can serialize functions using cloudpickle)
-        # This matches the pattern used by verl and fireworks backends
+        # workflow_class is already in config (serialized as string path)
+        # workflow_args can be passed directly (Ray can serialize functions via cloudpickle)
+        # This matches verl's pattern for consistency
         task = skyrl_entrypoint.remote(self.config, workflow_args=self.workflow_args)
+        ray.get(task)

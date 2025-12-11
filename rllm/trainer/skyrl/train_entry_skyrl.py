@@ -84,13 +84,37 @@ class RLLMGenerator(GeneratorInterface):
 
 
 class RLLMPPOExp(BasePPOExp):
+    def __init__(self, cfg: DictConfig, workflow_args: dict | None = None):
+        """Initialize RLLM PPO experiment.
+        
+        Args:
+            cfg: Training configuration
+            workflow_args: Optional workflow arguments (can include functions).
+                          These will be merged with workflow_args from config.
+        """
+        super().__init__(cfg)
+        self.workflow_args = workflow_args or {}
+    
     def get_generator(self, cfg, tokenizer, llm_endpoint_client):
         # Get workflow class and args from config
         workflow_class = cfg.generator.get("workflow_class", None)
-        workflow_args = cfg.generator.get("workflow_args", {})
+        config_workflow_args = cfg.generator.get("workflow_args", {})
         
         if workflow_class is None:
             raise ValueError("workflow_class must be specified in cfg.generator")
+        
+        # Merge workflow_args from parameter with config (similar to verl's pattern)
+        # Start with parameter, then merge config values into it (parameter takes precedence)
+        workflow_args = self.workflow_args or {}
+        if config_workflow_args is not None:
+            for key, value in config_workflow_args.items():
+                if value is not None:
+                    if key in workflow_args and isinstance(workflow_args[key], dict) and isinstance(value, dict):
+                        workflow_args[key].update(value)
+                    else:
+                        # Only set config value if parameter doesn't have this key
+                        if key not in workflow_args:
+                            workflow_args[key] = value
         
         # Import the workflow class
         from importlib import import_module
@@ -136,9 +160,16 @@ class RLLMPPOExp(BasePPOExp):
 
 
 @ray.remote(num_cpus=1)
-def skyrl_entrypoint(cfg: DictConfig):
+def skyrl_entrypoint(cfg: DictConfig, workflow_args: dict | None = None):
+    """SkyRL entrypoint for training rLLM workflows.
+    
+    Args:
+        cfg: Training configuration
+        workflow_args: Optional workflow arguments (can include functions).
+                      These will be merged with workflow_args from config.
+    """
     # make sure that the training loop is not run on the head node.
-    exp = RLLMPPOExp(cfg)
+    exp = RLLMPPOExp(cfg, workflow_args=workflow_args)
     exp.run()
 
 
