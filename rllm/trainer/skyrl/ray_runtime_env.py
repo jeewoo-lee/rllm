@@ -23,26 +23,25 @@ def prepare_config(
     workflow_args: dict | None = None,
 ) -> None:
     """
-    Prepare SkyRL config by serializing workflow_class.
+    Prepare SkyRL config by optionally serializing workflow_class.
     
     This function:
-    - Converts workflow_class to a string path (for Ray serialization)
+    - Optionally converts workflow_class to a string path in config (as fallback)
     
-    Note: workflow_args are NOT put into config here. They are passed directly
-    to skyrl_entrypoint() as a parameter and merged with config values in
-    RLLMPPOExp.get_generator(). This allows functions to be included (Ray
-    serializes them with cloudpickle).
+    Note: workflow_class and workflow_args are passed directly to skyrl_entrypoint()
+    as parameters (Ray can serialize them with cloudpickle). The config serialization
+    is only a fallback for cases where workflow_class is not provided as a parameter.
     
     Args:
         cfg: Training configuration to modify in-place
-        workflow_class: Workflow class to serialize into config
+        workflow_class: Optional workflow class to serialize into config (as fallback)
         workflow_args: Workflow arguments (unused here, kept for API consistency)
     """
-    # Set workflow class in config if provided
+    # Optionally set workflow class in config as fallback
     # Convert to string path because:
     # 1. Config needs to be serializable for Ray remote calls
     # 2. Class objects can't be serialized in DictConfig
-    # 3. RLLMPPOExp.get_generator() will deserialize it using import_module
+    # 3. RLLMPPOExp.get_generator() will deserialize it if not provided as parameter
     if workflow_class is not None:
         workflow_class_str = f"{workflow_class.__module__}.{workflow_class.__name__}"
         cfg.generator.workflow_class = workflow_class_str
@@ -86,24 +85,3 @@ def initialize_ray(cfg: "DictConfig") -> None:
     _initialize_ray(cfg)
 
 
-def prep_ray_env(
-    cfg: "DictConfig",
-    workflow_class: type | None = None,
-    workflow_args: dict | None = None,
-) -> None:
-    """
-    Prepare Ray environment for SkyRL training.
-    
-    This is a convenience function that encapsulates all setup steps:
-    1. Prepare config (serialize workflow_class and workflow_args)
-    2. Validate config
-    3. Initialize Ray cluster
-    
-    Args:
-        cfg: Training configuration to modify in-place
-        workflow_class: Workflow class to serialize into config
-        workflow_args: Workflow arguments to merge into config (only serializable values)
-    """
-    prepare_config(cfg=cfg, workflow_class=workflow_class, workflow_args=workflow_args)
-    validate_cfg(cfg)
-    initialize_ray(cfg)

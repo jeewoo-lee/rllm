@@ -8,8 +8,7 @@ from concurrent.futures import ThreadPoolExecutor
 from omegaconf import DictConfig
 from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, GeneratorOutput
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
-from skyrl_train.entrypoints.main_base import BasePPOExp, validate_cfg
-from skyrl_train.utils import initialize_ray
+from skyrl_train.entrypoints.main_base import BasePPOExp
 from pathlib import Path
 from skyrl_train.generators.utils import get_rollout_metrics, get_response_ids_and_loss_mask_from_messages
 import ray
@@ -84,24 +83,35 @@ class RLLMGenerator(GeneratorInterface):
 
 
 class RLLMPPOExp(BasePPOExp):
-    def __init__(self, cfg: DictConfig, workflow_args: dict | None = None):
+    def __init__(self, cfg: DictConfig, workflow_class: type | None = None, workflow_args: dict | None = None):
         """Initialize RLLM PPO experiment.
         
         Args:
             cfg: Training configuration
+            workflow_class: Optional workflow class (can be passed directly or from config)
             workflow_args: Optional workflow arguments (can include functions).
                           These will be merged with workflow_args from config.
         """
         super().__init__(cfg)
+        self.workflow_class = workflow_class
         self.workflow_args = workflow_args or {}
     
     def get_generator(self, cfg, tokenizer, llm_endpoint_client):
-        # Get workflow class and args from config
-        workflow_class = cfg.generator.get("workflow_class", None)
-        config_workflow_args = cfg.generator.get("workflow_args", {})
-        
+        # Get workflow class from parameter or config (parameter takes precedence)
+        workflow_class = self.workflow_class
         if workflow_class is None:
-            raise ValueError("workflow_class must be specified in cfg.generator")
+            # Fallback to config if not provided as parameter
+            workflow_class_str = cfg.generator.get("workflow_class", None)
+            if workflow_class_str is None:
+                raise ValueError("workflow_class must be specified either as parameter or in cfg.generator")
+            # Deserialize from string if needed
+            from importlib import import_module
+            module_path, class_name = workflow_class_str.rsplit(".", 1)
+            module = import_module(module_path)
+            workflow_class = getattr(module, class_name)
+        
+        # Get workflow_args from config
+        config_workflow_args = cfg.generator.get("workflow_args", {})
         
         # Merge workflow_args from parameter with config (similar to verl's pattern)
         # Start with parameter, then merge config values into it (parameter takes precedence)
@@ -116,17 +126,11 @@ class RLLMPPOExp(BasePPOExp):
                         if key not in workflow_args:
                             workflow_args[key] = value
         
-        # Import the workflow class
-        from importlib import import_module
-        module_path, class_name = workflow_class.rsplit(".", 1)
-        module = import_module(module_path)
-        workflow_cls = getattr(module, class_name)
-        
         generator = RLLMGenerator(
             config=cfg,
             tokenizer=tokenizer,
             inference_engine_client=llm_endpoint_client,
-            workflow_class=workflow_cls,
+            workflow_class=workflow_class,
             workflow_args=workflow_args,
         )
         return generator
@@ -160,17 +164,55 @@ class RLLMPPOExp(BasePPOExp):
 
 
 @ray.remote(num_cpus=1)
-def skyrl_entrypoint(cfg: DictConfig, workflow_args: dict | None = None):
+def skyrl_entrypoint(cfg: DictConfig, workflow_class: type | None = None, workflow_args: dict | None = None):
     """SkyRL entrypoint for training rLLM workflows.
     
     Args:
         cfg: Training configuration
+        workflow_class: Optional workflow class (can be passed directly or from config).
+                       If not provided, will be read from cfg.generator.workflow_class.
         workflow_args: Optional workflow arguments (can include functions).
                       These will be merged with workflow_args from config.
     """
+    from rllm.trainer.skyrl.ray_runtime_env import validate_cfg
+    
+    # Validate config (matching verl's pattern where validation happens in remote function)
+    validate_cfg(cfg)
+    
     # make sure that the training loop is not run on the head node.
-    exp = RLLMPPOExp(cfg, workflow_args=workflow_args)
+    exp = RLLMPPOExp(cfg, workflow_class=workflow_class, workflow_args=workflow_args)
     exp.run()
+
+
+def run_skyrl(cfg: DictConfig, workflow_class: type | None = None, workflow_args: dict | None = None) -> None:
+    """Run SkyRL training.
+    
+    Args:
+        cfg: Training configuration
+        workflow_class: Optional workflow class (can be passed directly or from config)
+        workflow_args: Optional workflow arguments (can include functions)
+    """
+    import ray
+    
+    from rllm.trainer.skyrl.ray_runtime_env import prepare_config, initialize_ray
+    
+    # Prepare config (serialize workflow_class as fallback)
+    prepare_config(
+        cfg=cfg,
+        workflow_class=workflow_class,
+        workflow_args=workflow_args,
+    )
+    
+    # Initialize Ray (matching verl's pattern - inline initialization)
+    initialize_ray(cfg)
+    
+    task = skyrl_entrypoint.remote(cfg, workflow_class=workflow_class, workflow_args=workflow_args)
+    try:
+        ray.get(task)
+    except KeyboardInterrupt:
+        print("KeyboardInterrupt received, shutting down...")
+        ray.cancel(task)
+        raise
 
 
 # Use rLLM's config directory for rLLM-specific configs
@@ -178,17 +220,7 @@ rllm_config_dir = str(Path(__file__).parent.parent / "config")
 
 @hydra.main(config_path=rllm_config_dir, config_name="rllm_skyrl_ppo_config", version_base=None)
 def main(cfg: DictConfig) -> None:
-    # validate the arguments
-    validate_cfg(cfg)
-
-    initialize_ray(cfg)
-    task = skyrl_entrypoint.remote(cfg)
-    try:
-        ray.get(task)
-    except KeyboardInterrupt:
-        print("KeyboardInterrupt received, shutting down...")
-        ray.cancel(task)
-        raise
+    run_skyrl(cfg)
 
 
 if __name__ == "__main__":

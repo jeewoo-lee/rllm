@@ -186,21 +186,13 @@ class AgentTrainer:
         Train using the Skyrl backend.
         For now, it supports workflow-based training.
         """
-        import ray
-
-        from rllm.trainer.skyrl.train_entry_skyrl import skyrl_entrypoint
-        from rllm.trainer.skyrl.ray_runtime_env import prep_ray_env
+        from rllm.trainer.skyrl.train_entry_skyrl import run_skyrl
         
-        # Prepare Ray environment: serialize config, validate, and initialize Ray
-        prep_ray_env(
+        # Run SkyRL training (handles Ray initialization and validation)
+        # workflow_class and workflow_args are passed directly (Ray can serialize them via cloudpickle)
+        # This matches verl's and tinker's pattern for consistency
+        run_skyrl(
             cfg=self.config,
             workflow_class=self.workflow_class,
             workflow_args=self.workflow_args,
         )
-        
-        # Call SkyRL entrypoint as a Ray remote task
-        # workflow_class is already in config (serialized as string path)
-        # workflow_args can be passed directly (Ray can serialize functions via cloudpickle)
-        # This matches verl's pattern for consistency
-        task = skyrl_entrypoint.remote(self.config, workflow_args=self.workflow_args)
-        ray.get(task)
