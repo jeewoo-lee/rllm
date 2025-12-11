@@ -25,7 +25,7 @@ class AgentTrainer:
         config: dict[str, Any] | list[str] | None = None,
         train_dataset: Dataset | None = None,
         val_dataset: Dataset | None = None,
-        backend: Literal["verl", "fireworks", "tinker"] = "verl",
+        backend: Literal["verl", "fireworks", "tinker", "skyrl"] = "verl",
         agent_run_func: Callable | None = None,
     ):
         """
@@ -43,10 +43,10 @@ class AgentTrainer:
                    or a list of strings in the format "key=value" (e.g., ["data.train_batch_size=8"])
             train_dataset: Optional train dataset to use
             val_dataset: Optional validation dataset to use
-            backend: Training backend to use ('verl' or 'fireworks'). Default is 'verl'
+            backend: Training backend to use ('verl', 'fireworks', 'tinker', or 'skyrl'). Default is 'verl'
         """
         # Validate backend
-        assert backend in ["verl", "fireworks", "tinker"], f"Unsupported backend: {backend}, must be one of ['verl', 'fireworks', 'tinker']"
+        assert backend in ["verl", "fireworks", "tinker", "skyrl"], f"Unsupported backend: {backend}, must be one of ['verl', 'fireworks', 'tinker', 'skyrl']"
 
         self.backend = backend
 
