@@ -4,4 +4,4 @@
 	branch = main
 [submodule "skyrl"]
 	path = skyrl
-	url = https://github.com/berkeley-sky-lab/skyrl.git
+	url = https://github.com/NovaSky-AI/SkyRL.git
