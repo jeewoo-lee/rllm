@@ -1,7 +1,7 @@
 import re
 
 from datasets import load_dataset
-
+import pyarrow.parquet as pq
 from rllm.data.dataset import DatasetRegistry
 
 
@@ -13,6 +13,11 @@ def extract_solution(solution_str):
     final_solution = final_solution.split("#### ")[1].replace(",", "")
     return final_solution
 
+
+import os
+def save_as_parquet(dataset, path):
+    table = dataset.data.table
+    pq.write_table(table, path)
 
 def prepare_gsm8k_data():
     gsm8k_dataset = load_dataset("openai/gsm8k", "main")
@@ -28,9 +33,21 @@ def prepare_gsm8k_data():
 
     train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
     test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
+    
+    save_dir = "/home/ec2-user/rllm/~/data/rlhf/gsm8k/"
+    save_as_parquet(train_dataset, f"{save_dir}/train.parquet")
+    save_as_parquet(test_dataset, f"{save_dir}/test.parquet")
 
     train_dataset = DatasetRegistry.register_dataset("gsm8k", train_dataset, "train")
     test_dataset = DatasetRegistry.register_dataset("gsm8k", test_dataset, "test")
+
+    
+    
+     # 🔽 SAVE AS PARQUET
+    # train_dataset.to_parquet(f"{save_dir}/train.parquet")
+    # test_dataset.to_parquet(f"{save_dir}/test.parquet")
+    
+
     return train_dataset, test_dataset
 
 
@@ -38,3 +55,5 @@ if __name__ == "__main__":
     train_dataset, test_dataset = prepare_gsm8k_data()
     print(train_dataset)
     print(test_dataset)
+    
+    

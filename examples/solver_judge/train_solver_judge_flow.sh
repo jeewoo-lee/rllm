@@ -61,6 +61,6 @@ python3 -m examples.solver_judge.train_solver_judge_flow \
     trainer.default_hdfs_dir=null \
     trainer.total_epochs=100 \
     rllm.workflow.use_workflow=True \
-    +ray_init._temp_dir=/home/tianhao/tmp
+    +ray_init._temp_dir=/home/ec2-user/tmp
 
 pkill -9 -f 'ray::WorkerDict' 

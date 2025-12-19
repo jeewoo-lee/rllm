@@ -38,7 +38,7 @@ from verl.trainer.ppo.ray_trainer import (
     apply_kl_penalty,
     compute_advantage,
 )
-from verl.trainer.ppo.utils import Role, WorkerType
+from verl.trainer.ppo.ray_trainer import Role, WorkerType
 from verl.utils.metric import reduce_metrics
 
 

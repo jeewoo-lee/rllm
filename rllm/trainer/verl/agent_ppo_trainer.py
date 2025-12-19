@@ -26,7 +26,7 @@ from verl.trainer.ppo.ray_trainer import (
     compute_advantage,
     compute_response_mask,
 )
-from verl.trainer.ppo.utils import Role, WorkerType
+from verl.trainer.ppo.ray_trainer import Role, WorkerType
 from verl.utils.metric import reduce_metrics
 
 
