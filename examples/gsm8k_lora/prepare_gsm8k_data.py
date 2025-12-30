@@ -26,6 +26,9 @@ def prepare_gsm8k_data():
 
     def preprocess_fn(example, idx):
         return {
+            "prompt": [
+                {"role":"user", "content": example["question"]}
+            ],
             "question": example["question"],
             "ground_truth": extract_solution(example["answer"]),
             "data_source": "gsm8k",
@@ -34,7 +37,9 @@ def prepare_gsm8k_data():
     train_dataset = train_dataset.map(preprocess_fn, with_indices=True)
     test_dataset = test_dataset.map(preprocess_fn, with_indices=True)
     
-    save_dir = "/home/ec2-user/rllm/~/data/rlhf/gsm8k/"
+    # TODO: replace (username) with your username
+    save_dir = "/home/ray/rllm/~/data/rlhf/gsm8k"
+    os.makedirs(save_dir, exist_ok=True)
     save_as_parquet(train_dataset, f"{save_dir}/train.parquet")
     save_as_parquet(test_dataset, f"{save_dir}/test.parquet")
 

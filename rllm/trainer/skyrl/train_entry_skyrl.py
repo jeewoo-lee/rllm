@@ -10,7 +10,7 @@ from skyrl_train.generators.base import GeneratorInterface, GeneratorInput, Gene
 from skyrl_train.inference_engines.inference_engine_client import InferenceEngineClient
 from skyrl_train.entrypoints.main_base import BasePPOExp
 from pathlib import Path
-from skyrl_train.generators.utils import get_rollout_metrics, get_response_ids_and_loss_mask_from_messages
+from skyrl_train.generators.utils import get_rollout_metrics
 import ray
 
 from rllm.engine.rollout.skyrl_engine import SkyRLEngine

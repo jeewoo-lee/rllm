@@ -191,6 +191,8 @@ class AgentTrainer:
         # Run SkyRL training (handles Ray initialization and validation)
         # workflow_class and workflow_args are passed directly (Ray can serialize them via cloudpickle)
         # This matches verl's and tinker's pattern for consistency
+        import pdb
+        pdb.set_trace()
         run_skyrl(
             cfg=self.config,
             workflow_class=self.workflow_class,
