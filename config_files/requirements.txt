@@ -1,3 +1,6 @@
+--index-url https://download.pytorch.org/whl/cu128
+--extra-index-url https://pypi.org/simple
+
 absl-py==2.3.1
 accelerate==1.12.0
 addict==2.4.0
@@ -13,12 +16,12 @@ aiosqlite==0.22.1
 airportsdata==20250909
 alembic==1.17.2
 annotated-doc==0.0.4
-annotated-types @ file:///home/conda/feedstock_root/build_artifacts/annotated-types_1733247046149/work
+annotated-types==0.7.0
 anthropic==0.71.0
 antlr4-python3-runtime==4.9.3
 anyio==4.12.0
 apache-tvm-ffi==0.1.7
-appdirs @ file:///home/conda/feedstock_root/build_artifacts/appdirs_1733753955715/work
+appdirs==1.4.4
 argon2-cffi==25.1.0
 argon2-cffi-bindings==25.1.0
 arrow==1.4.0
@@ -38,7 +41,7 @@ bleach==6.3.0
 blinker==1.9.0
 botocore==1.41.5
 bracex==2.6
-Brotli @ file:///home/conda/feedstock_root/build_artifacts/brotli-split_1761591974641/work
+Brotli==1.2.0
 browsergym==0.14.2
 browsergym-assistantbench==0.14.2
 browsergym-core==0.14.2
@@ -50,11 +53,11 @@ browsergym-workarena==0.5.1
 cachetools==6.2.4
 camel-ai==0.2.82
 cbor2==5.7.1
-certifi @ file:///home/conda/feedstock_root/build_artifacts/certifi_1759648874697/work/certifi
-cffi @ file:///home/conda/feedstock_root/build_artifacts/cffi_1761202850602/work
+certifi==2025.10.5
+cffi==2.0.0
 cfgv==3.5.0
 chardet==5.2.0
-charset-normalizer @ file:///home/conda/feedstock_root/build_artifacts/charset-normalizer_1760437218288/work
+charset-normalizer==3.4.4
 click==8.3.1
 cloudpickle==3.1.2
 codetiming==1.4.0
@@ -123,8 +126,8 @@ gepa==0.0.17
 gguf==0.17.1
 ghapi==1.0.8
 ghp-import==2.1.0
-gitdb @ file:///home/conda/feedstock_root/build_artifacts/gitdb_1735887193964/work
-GitPython @ file:///home/conda/feedstock_root/build_artifacts/gitpython_1753444155689/work
+gitdb==4.0.12
+GitPython==3.1.45
 google-api-core==2.28.1
 google-auth==2.45.0
 google-cloud-aiplatform==1.132.0
@@ -148,19 +151,19 @@ grpcio-status==1.62.3
 grpclib==0.4.9
 gymnasium==1.2.3
 h11==0.16.0
-h2 @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_h2_1756364871/work
-hf-xet==1.2.0
+h2==4.3.0
 hf_transfer==0.1.9
-hpack @ file:///home/conda/feedstock_root/build_artifacts/hpack_1737618293087/work
+hf-xet==1.2.0
+hpack==4.1.0
 httpcore==1.0.9
 httptools==0.7.1
 httpx==0.28.1
 httpx-sse==0.4.3
 huggingface-hub==0.36.0
 hydra-core==1.3.2
-hyperframe @ file:///home/conda/feedstock_root/build_artifacts/hyperframe_1737618333194/work
+hyperframe==6.1.0
 identify==2.6.15
-idna @ file:///home/conda/feedstock_root/build_artifacts/idna_1760286409563/work
+idna==3.11
 ijson==3.4.0.post0
 ImageIO==2.37.2
 importlib_metadata==8.5.0
@@ -178,17 +181,17 @@ Jinja2==3.1.6
 jiter==0.12.0
 jmespath==1.0.1
 joblib==1.5.3
-json5==0.12.1
 json_repair==0.54.3
+json5==0.12.1
 jsonpointer==3.0.0
 jsonschema==4.25.1
 jsonschema-specifications==2025.9.1
 jupyter==1.1.1
+jupyter_client==8.7.0
 jupyter-console==6.6.3
+jupyter_core==5.9.1
 jupyter-events==0.12.0
 jupyter-lsp==2.3.0
-jupyter_client==8.7.0
-jupyter_core==5.9.1
 jupyter_server==2.17.0
 jupyter_server_terminals==0.5.3
 jupyterlab==4.5.1
@@ -281,7 +284,7 @@ orderly-set==5.5.0
 orjson==3.11.5
 outcome==1.3.0.post0
 outlines_core==0.2.11
-packaging @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_packaging_1745345660/work
+packaging==25.0
 paginate==0.5.7
 pandas==2.3.3
 pandoc==2.4
@@ -294,8 +297,9 @@ peewee==3.18.3
 peft==0.18.0
 pexpect==4.9.0
 pillow==11.3.0
+pip==25.2
 pipdeptree==2.30.0
-platformdirs @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_platformdirs_1759953252/work
+platformdirs==4.5.0
 playwright==1.44.0
 pluggy==1.6.0
 plumbum==1.10.0
@@ -304,8 +308,8 @@ polars==1.36.1
 polars-runtime-32==1.36.1
 portalocker==3.2.0
 pre_commit==4.5.1
-prometheus-fastapi-instrumentator==7.1.0
 prometheus_client==0.23.1
+prometheus-fastapi-instrumentator==7.1.0
 prompt_toolkit==3.0.52
 propcache==0.4.1
 proto-plus==1.27.0
@@ -321,11 +325,11 @@ pyasn1_modules==0.4.2
 pybase64==1.4.3
 pybind11==3.0.1
 pycountry==24.6.1
-pycparser @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_pycparser_1733195786/work
+pycparser==2.22
 pydantic==2.12.0
+pydantic_core==2.41.1
 pydantic-extra-types==2.10.6
 pydantic-settings==2.12.0
-pydantic_core==2.41.1
 pydub==0.25.1
 pyee==11.1.0
 Pygments==2.19.2
@@ -333,7 +337,7 @@ PyJWT==2.10.1
 pylatexenc==2.10
 pymdown-extensions==10.19.1
 pyparsing==3.3.1
-PySocks @ file:///home/conda/feedstock_root/build_artifacts/pysocks_1733217236728/work
+PySocks==1.7.1
 pytest==9.0.2
 pytest-asyncio==1.3.0
 python-dateutil==2.9.0.post0
@@ -343,14 +347,14 @@ python-multipart==0.0.21
 pytokens==0.3.0
 pytz==2025.2
 pyvers==0.1.0
-PyYAML @ file:///home/conda/feedstock_root/build_artifacts/pyyaml_1758891829620/work
+PyYAML==6.0.3
 pyyaml_env_tag==1.1
 pyzmq==27.1.0
 questionary==2.1.1
 ray==2.51.1
 referencing==0.37.0
 regex==2025.11.3
-requests @ file:///home/conda/feedstock_root/build_artifacts/requests_1755614211359/work
+requests==2.32.5
 requests-oauthlib==2.0.0
 rfc3339-validator==0.1.4
 rfc3986-validator==0.1.1
@@ -358,7 +362,7 @@ rfc3987-syntax==1.1.0
 rich==14.2.0
 rich-toolkit==0.17.1
 rignore==0.7.6
--e git+https://github.com/jeewoo-lee/rllm@578a33e5baa3e68484317aabbe6cc1ae4dc9a299#egg=rllm
+rllm==0.2.0
 rpds-py==0.30.0
 rsa==4.9.1
 ruff==0.14.10
@@ -374,16 +378,16 @@ semantic-version==2.10.0
 Send2Trash==1.8.3
 sentence-transformers==5.2.0
 sentencepiece==0.2.1
-sentry-sdk @ file:///home/conda/feedstock_root/build_artifacts/sentry-sdk_1761742537932/work
-setproctitle @ file:///home/conda/feedstock_root/build_artifacts/setproctitle_1746015864946/work
+sentry-sdk==2.43.0
+setproctitle==1.3.6
 setuptools==79.0.1
 shapely==2.1.2
 shellingham==1.5.4
-six @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_six_1753199211/work
--e git+https://github.com/novasky-ai/SkyRL.git@901fc9cc46068306b429fb77e8b4c591cf4ecd56#egg=skyrl_gym&subdirectory=skyrl-gym
--e git+https://github.com/novasky-ai/SkyRL.git@901fc9cc46068306b429fb77e8b4c591cf4ecd56#egg=skyrl_train&subdirectory=skyrl-train
+six==1.17.0
+skyrl-gym==0.1.1
+skyrl-train==0.3.0
 smart_open==7.5.0
-smmap @ file:///home/conda/feedstock_root/build_artifacts/smmap_1739781697784/work
+smmap==5.0.2
 sniffio==1.3.1
 sortedcontainers==2.4.0
 soundfile==0.13.1
@@ -429,21 +433,21 @@ types-certifi==2021.10.8.3
 types-requests==2.32.4.20250913
 types-toml==0.10.8.20240310
 types-tqdm==4.67.0.20250809
+typing_extensions==4.15.0
 typing-inspect==0.9.0
-typing-inspection @ file:///home/conda/feedstock_root/build_artifacts/typing-inspection_1759301180011/work
-typing_extensions @ file:///home/conda/feedstock_root/build_artifacts/bld/rattler-build_typing_extensions_1756220668/work
+typing-inspection==0.4.2
 tzdata==2025.3
 unidiff==0.7.5
 uri-template==1.3.0
-urllib3 @ file:///home/conda/feedstock_root/build_artifacts/urllib3_1750271362675/work
+urllib3==2.5.0
 uvicorn==0.40.0
 uvloop==0.22.1
--e git+https://github.com/volcengine/verl.git@8fdc4d3f202f41461f4de9f42a637228e342668b#egg=verl&subdirectory=../../verl
+verl==0.5.0
 vertexai==1.43.0
 virtualenv==20.35.4
 vllm==0.11.0
 wadler_lindig==0.1.7
-wandb @ file:///home/conda/feedstock_root/build_artifacts/wandb_1761808534536/work
+wandb==0.22.3
 watchdog==6.0.0
 watchfiles==1.1.1
 wcmatch==10.1

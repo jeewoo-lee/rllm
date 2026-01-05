@@ -1,4 +1,4 @@
-name: skyrl-train
+name: skyrl-train-cp
 channels:
   - conda-forge
 dependencies:
